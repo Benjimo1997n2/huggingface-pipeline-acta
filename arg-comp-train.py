@@ -11,11 +11,17 @@ import os
 
 # Import custom functions from util.py
 from utils import read_conll_file, create_hf_dataset, tokenize_and_align_labels, compute_metrics
+import config
+
+configuration = config.Config("abstrct", "allenai/scibert_scivocab_uncased", "allenai/scibert_scivocab_uncased", "scibert")
+
+# Create the directory to store the model
+os.makedirs(f"./models/{configuration.name}/{configuration.model_name}", exist_ok=True)
 
 # Step 3: Read the CoNLL files
-train_sentences, train_labels = read_conll_file("datasets/abstrct/dev.conll")
-dev_sentences, dev_labels = read_conll_file("datasets/abstrct/dev.conll")
-test_sentences, test_labels = read_conll_file("datasets/abstrct/test.conll")
+train_sentences, train_labels = read_conll_file(f"datasets/{configuration.name}/train.conll")
+dev_sentences, dev_labels = read_conll_file(f"datasets/{configuration.name}/dev.conll")
+test_sentences, test_labels = read_conll_file(f"datasets/{configuration.name}/test.conll")
 
 # Step 4: Create Hugging Face datasets
 train_dataset = create_hf_dataset(train_sentences, train_labels)
@@ -30,7 +36,7 @@ datasets = DatasetDict({
 })
 
 # Step 6: Load the tokenizer
-tokenizer = AutoTokenizer.from_pretrained("allenai/scibert_scivocab_uncased")
+tokenizer = AutoTokenizer.from_pretrained(configuration.tokenizer)
 
 # Step 7: Preprocess the dataset
 label_list = list(set([label for sublist in train_labels for label in sublist]))
@@ -41,14 +47,14 @@ label_to_id = {label: i for i, label in enumerate(label_list)}
 tokenized_datasets = datasets.map(lambda x: tokenize_and_align_labels(x, tokenizer, label_to_id), batched=True)
 
 # Step 8: Load the model
-model = AutoModelForTokenClassification.from_pretrained("allenai/scibert_scivocab_uncased", num_labels=len(label_list))
+model = AutoModelForTokenClassification.from_pretrained(configuration.model, num_labels=len(label_list))
 
 # Step 9: Define the metric
 metric = evaluate.load("seqeval")
 
 # Step 10: Define training arguments
 training_args = TrainingArguments(
-    output_dir="./results",
+    output_dir=f"./results/{configuration.name}",
     eval_strategy="epoch",
     learning_rate=2e-5,
     per_device_train_batch_size=16,
@@ -84,15 +90,16 @@ trainer.save_state()
 eval_result = trainer.evaluate()
 
 # Step 15: Save evaluation results
-eval_metrics = eval_result.metrics
+# Access metrics directly from the eval_result dictionary
+eval_metrics = eval_result
 trainer.log_metrics("eval", eval_metrics)
 trainer.save_metrics("eval", eval_metrics)
 
 # Optional: Print classification report
-print(eval_metrics['classification_report'])
+print(eval_metrics.get('classification_report', 'No classification report available'))
 
 # Step 16: Save the fine-tuned model
-model_save_path = "./models/abstrct/scibert"
+model_save_path = f"./models/{configuration.name}/{configuration.model_name}"
 os.makedirs(model_save_path, exist_ok=True)
 trainer.save_model(model_save_path)
 
