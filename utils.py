@@ -1,4 +1,6 @@
 from datasets import Dataset
+from sklearn.metrics import accuracy_score, f1_score, classification_report
+import numpy as np
 
 def read_conll_file(file_path):
     sentences = []
@@ -50,22 +52,30 @@ def tokenize_and_align_labels(examples, tokenizer, label_to_id, max_length=256):
     return tokenized_inputs
 
 def compute_metrics(p, label_list):
-    import numpy as np
-    from seqeval.metrics import classification_report
-    
     predictions, labels = p
     predictions = np.argmax(predictions, axis=2)
 
+    # Remove ignored index (special tokens)
     true_labels = [[label_list[l] for l in label if l != -100] for label in labels]
     true_predictions = [
         [label_list[p] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
 
-    results = classification_report(true_labels, true_predictions, output_dict=True)
+    # Flatten the lists
+    true_labels_flat = [item for sublist in true_labels for item in sublist]
+    true_predictions_flat = [item for sublist in true_predictions for item in sublist]
+
+    # Compute the metrics
+    accuracy = accuracy_score(true_labels_flat, true_predictions_flat)
+    f1 = f1_score(true_labels_flat, true_predictions_flat, average="weighted")
+    macro_f1 = f1_score(true_labels_flat, true_predictions_flat, average="macro")
+
+    classification_rep = classification_report(true_labels_flat, true_predictions_flat, target_names=label_list)
+
     return {
-        "precision": results["weighted avg"]["precision"],
-        "recall": results["weighted avg"]["recall"],
-        "f1": results["weighted avg"]["f1-score"],
-        "accuracy": results["accuracy"],
+        "accuracy": accuracy,
+        "f1": f1,
+        "macro_f1": macro_f1,
+        "classification_report": classification_rep,
     }

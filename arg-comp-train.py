@@ -7,12 +7,13 @@ import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification, TrainingArguments, Trainer
 from datasets import Dataset, DatasetDict
 import evaluate
+import os
 
 # Import custom functions from util.py
-from util import read_conll_file, create_hf_dataset, tokenize_and_align_labels, compute_metrics
+from utils import read_conll_file, create_hf_dataset, tokenize_and_align_labels, compute_metrics
 
 # Step 3: Read the CoNLL files
-train_sentences, train_labels = read_conll_file("datasets/abstrct/train.conll")
+train_sentences, train_labels = read_conll_file("datasets/abstrct/dev.conll")
 dev_sentences, dev_labels = read_conll_file("datasets/abstrct/dev.conll")
 test_sentences, test_labels = read_conll_file("datasets/abstrct/test.conll")
 
@@ -55,6 +56,9 @@ training_args = TrainingArguments(
     num_train_epochs=3,
     weight_decay=0.01,
     seed=42,
+    logging_dir="./logs",  # Directory for storing logs
+    logging_steps=10,
+    save_strategy="epoch",  # Save model at the end of each epoch
 )
 
 # Step 11: Initialize the Trainer
@@ -68,7 +72,29 @@ trainer = Trainer(
 )
 
 # Step 12: Train the model
-trainer.train()
+train_result = trainer.train()
 
-# Step 13: Evaluate the model
-trainer.evaluate()
+# Step 13: Save training results
+train_metrics = train_result.metrics
+trainer.log_metrics("train", train_metrics)
+trainer.save_metrics("train", train_metrics)
+trainer.save_state()
+
+# Step 14: Evaluate the model
+eval_result = trainer.evaluate()
+
+# Step 15: Save evaluation results
+eval_metrics = eval_result.metrics
+trainer.log_metrics("eval", eval_metrics)
+trainer.save_metrics("eval", eval_metrics)
+
+# Optional: Print classification report
+print(eval_metrics['classification_report'])
+
+# Step 16: Save the fine-tuned model
+model_save_path = "./models/abstrct/scibert"
+os.makedirs(model_save_path, exist_ok=True)
+trainer.save_model(model_save_path)
+
+# Optional: Save the tokenizer
+tokenizer.save_pretrained(model_save_path)
